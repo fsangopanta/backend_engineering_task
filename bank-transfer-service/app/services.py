@@ -1,15 +1,16 @@
 from decimal import Decimal
 from uuid import uuid4
 
-from app.exceptions import IdempotencyConflictError
+from app.exceptions import IdempotencyConflictError, AccountNotFoundError, InvalidAmountException
 from app.models import TransferRequest
-from app.repository import TransferRepository
+from app.repository import TransferRepository, AccountRepository
 
 
 class TransferService:
 
-    def __init__(self, repository: TransferRepository):
+    def __init__(self, repository: TransferRepository, account_repository: AccountRepository):
         self.repository = repository
+        self.account_repository = account_repository
 
     def create_transfer(self, request: TransferRequest):
 
@@ -40,3 +41,44 @@ class TransferService:
 
     def list_transfers(self):
         return self.repository.find_all()
+
+    def transfer(self, request:TransferRequest):
+
+        source_balance = self.account_repository.get_balance(
+            request.source_account
+        )
+
+        target_balance = self.account_repository.get_balance(
+            request.target_account
+        )
+
+        if source_balance is None:
+            raise AccountNotFoundError("Source account not found")
+
+        if target_balance is None:
+            raise AccountNotFoundError("Target account not found")
+
+        if source_balance < request.amount:
+            raise InvalidAmountException("Insufficient funds")
+
+        new_source_balance = source_balance - request.amount
+        new_target_balance = target_balance + request.amount
+
+        self.account_repository.update_balance(
+            request.source_account,
+            new_source_balance
+        )
+
+        self.account_repository.update_balance(
+            request.target_account,
+            new_target_balance
+        )
+
+        return {
+            "source_balance": new_source_balance,
+            "target_balance": new_target_balance,
+            "status": "COMPLETED"
+        }
+
+    def list_accounts(self):
+        return self.account_repository.list_accounts()
