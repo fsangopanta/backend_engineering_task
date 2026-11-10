@@ -8,8 +8,9 @@ from app.services import TransferService
 
 app = FastAPI()
 
-repository = TransferRepository()
-service = TransferService(repository)
+app.state.repository = TransferRepository()
+
+service = TransferService(app.state.repository)
 
 
 @app.exception_handler(IdempotencyConflictError)
